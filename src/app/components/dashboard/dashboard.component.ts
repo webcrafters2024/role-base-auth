@@ -23,6 +23,14 @@ export class DashboardComponent {
 
   ngOnInit(): void {
     this.getData()
+    this.getData()
+    this.getData()
+
+    this.getData()
+
+    this.getData()
+
+    this.getData()
   }
 
   getData(){

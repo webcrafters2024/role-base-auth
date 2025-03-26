@@ -13,7 +13,8 @@ export class ApiService {
 
 
   apiPost(subUrl: string, params: any,): Observable<any> {
-    return this.http.post(subUrl, params);
+    const options = { withCredentials: true };
+    return this.http.post(subUrl, params, options);
   }
 
   apiGet(subUrl: string): Observable<any> {
@@ -22,9 +23,9 @@ export class ApiService {
 
 
   
-  updateRefreshToken(subUrl: string,  params: any): Observable<any> {
+  updateRefreshToken(subUrl: string): Observable<any> {
     const options = { withCredentials: true };
-    return this.http.post(subUrl, params, options);
+    return this.http.get(subUrl,  options);
    }
 
   

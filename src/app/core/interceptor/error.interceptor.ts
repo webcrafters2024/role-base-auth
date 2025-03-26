@@ -1,138 +1,113 @@
 import { HttpInterceptorFn, HttpRequest, HttpHandlerFn, HttpEvent, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, switchMap, finalize, filter, take } from 'rxjs/operators';
-import { Observable, throwError, BehaviorSubject, EMPTY } from 'rxjs';
-
-
-import { LoginService } from '../service/login.service'; // Adjust the import path as necessary
-
-import { CommonService } from '../service/common.service'; // Adjust the import path as necessary
+import { catchError, switchMap, filter, take, finalize } from 'rxjs/operators';
+import { Observable, throwError, BehaviorSubject } from 'rxjs';
+import { ApiService } from '../service/api.service';
+import { LoginService } from '../service/login.service';
+import { CommonService } from '../service/common.service';
 import { environment } from '../../../environments/environment';
 
-// State variables for token refresh
-let refreshInProgress = false;
-const failedRequests: HttpRequest<any>[] = [];
-const retrySubject = new BehaviorSubject<any>(null);
-let jwtToken = '';
 
-export const errorInterceptor: HttpInterceptorFn = (req: HttpRequest<any>, next: HttpHandlerFn): Observable<HttpEvent<any>> => {
-  const apiService = inject(APIService);
-  const toastService = inject(ToastService);
-  const loginService = inject(LoginService);
-  const commonService = inject(CommonService);
+// Shared state variables for managing token refresh
+let isRefreshing = false; // Flag to track if token refresh is in progress
+const pendingRequests: HttpRequest<any>[] = []; // Queue for requests during refresh
+const tokenRefresh$ = new BehaviorSubject<string | null>(null); // Stream for new tokens
 
+
+
+export const errorInterceptor: HttpInterceptorFn = (req, next) => {
+  // Inject required services
+  const api = inject(ApiService); // For making API calls
+  const auth = inject(LoginService); // For authentication functions
+  const common = inject(CommonService); // For common utilities
+
+  // Continue with the request and catch any errors
   return next(req).pipe(
-    catchError((err: any) => {
-      if (err instanceof HttpErrorResponse && err.status === 401) {
-        return handleAuthError(req, next, apiService, toastService, loginService, commonService);
+    catchError((error: any) => {
+      // Only handle 401 Unauthorized errors
+      if (error instanceof HttpErrorResponse && error.status === 401) {
+        return handleUnauthorized(req, next, api, auth, common);
       }
-      return throwError(() => new Error('Some other error occurred'));
+      // Re-throw other errors
+      return throwError(() => error);
     })
   );
 };
 
-const handleAuthError = (
-  req: HttpRequest<any>,
-  next: HttpHandlerFn,
-  apiService: APIService,
-  toastService: ToastService,
-  loginService: LoginService,
-  commonService: CommonService
-): Observable<HttpEvent<any>> => {
-  if (!refreshInProgress) {
-    refreshInProgress = true;
-    retrySubject.next(null);
-
-    return apiService.updateRefreshToken('api/UserManagement/RefreshToken', null).pipe(
-      switchMap((res) => {
-        if (res.successCode === 1) {
-          jwtToken = res.result.jwtToken;
-          retryFailedRequests(next, commonService, toastService, loginService);
-          return retryRequest(req, next, res, commonService, toastService, loginService);
-        } else {
-          toastService.danger(res.message, 3000);
-          loginService.logOut();
-          return throwError(() => new Error('Error occurred'));
-        }
-      }),
-      catchError((error) => {
-        loginService.logOut();
-        console.log('ErrorInterceptor Error:', error);
-        return throwError(() => new Error('Some other error occurred'));
-      }),
-      finalize(() => {
-        refreshInProgress = false;
-      })
-    );
-  } else {
-    addFailedRequest(req);
-    return retrySubject.pipe(
-      filter((token) => token !== null),
+/**
+ * HANDLES UNAUTHORIZED ERRORS (401)
+ * Manages the token refresh flow and request retries
+ */
+const handleUnauthorized = ( req: HttpRequest<any>, next: HttpHandlerFn, api: ApiService,auth: LoginService, common: CommonService): Observable<HttpEvent<any>> => {
+  // If refresh already in progress, add request to queue
+  if (isRefreshing) {
+    pendingRequests.push(req);
+    // Wait for new token and then retry
+    return tokenRefresh$.pipe(
+      // Filter out null values (we only want the actual token)
+      filter((token): token is string => token !== null),
+      // Take only the first token emission
       take(1),
-      switchMap(() => {
-        const updatedRequest = req.clone({
-          setHeaders: { Authorization: `Bearer ${jwtToken}` },
-        });
-        retryFailedRequests(next, commonService, toastService, loginService);
-        return next.handle(updatedRequest);
-      })
-    );
+      // Retry the request with new token
+      switchMap((token) => next(addAuthHeader(req, token)))
+    )
   }
-};
 
-const retryRequest = (
-  req: HttpRequest<any>,
-  next: HttpHandlerFn,
-  res: any,
-  commonService: CommonService,
-  toastService: ToastService,
-  loginService: LoginService
-): Observable<HttpEvent<any>> => {
-  let updatedRequest = req;
-  if (!failedRequests.includes(req)) {
-    updatedRequest = addTokenHeader(req, res, commonService);
-  }
-  return next.handle(updatedRequest).pipe(
-    catchError((error) => {
-      if (error.status === 401) {
-        toastService.warning('Token is expired, Please Login again', 3000);
-        setTimeout(() => {
-          loginService.logOut();
-        }, 3000);
-        return EMPTY;
-      } else {
-        return throwError(() => new Error('Some other error occurred'));
-      }
+  // Start new refresh process
+  isRefreshing = true;
+  tokenRefresh$.next(null); // Reset token stream
+
+  // Call refresh token endpoint
+  return api.updateRefreshToken('api/user/refresh').pipe(
+    // Process successful token refresh
+    switchMap(({ accessToken }) => {
+      // Securely store the new token
+      common.setCookie(
+        environment.token,
+        common.encrypt(environment.tokenKey, accessToken),
+        environment.cookieExpTime
+      );
+
+      // Notify all waiting requests
+      tokenRefresh$.next(accessToken);
+      
+      // Process all queued requests with new token
+      processPendingRequests(next, accessToken);
+
+      // Retry the original request with new token
+      return next(addAuthHeader(req, accessToken));
     }),
+    // Handle errors during token refresh
+    catchError((error) => {
+      // Force logout if refresh fails
+      auth.logOut();
+      return throwError(() => error);
+    }),
+    // Clean up after completion (success or error)
     finalize(() => {
-      retrySubject.next(true);
+      isRefreshing = false;
     })
   );
 };
 
-const addFailedRequest = (request: HttpRequest<any>) => {
-  failedRequests.push(request);
+// ADDS AUTHORIZATION HEADER TO REQUEST
+const addAuthHeader = (req: HttpRequest<any>, token: string): HttpRequest<any> => {
+  return req.clone({
+    setHeaders: {
+      Authorization: `Bearer ${token}`
+    }
+  });
 };
 
-const retryFailedRequests = (
-  next: HttpHandlerFn,
-  commonService: CommonService,
-  toastService: ToastService,
-  loginService: LoginService
-) => {
-  for (const request of failedRequests) {
-    retrySubject.next(request);
-  }
-  failedRequests.length = 0; // Clear the array
-};
 
-const addTokenHeader = (request: HttpRequest<any>, response: any, commonService: CommonService) => {
-  const encryptedJwtToken = commonService.encrypt(environment.tokenKey, response.result.jwtToken);
-  commonService.setCookie(environment.token, encryptedJwtToken, environment.cookieExpTime);
-
-  let headers = request.headers;
-  if (response.result.jwtToken) {
-    headers = headers.set('Authorization', `bearer ${response.result.jwtToken}`);
+//PROCESSES PENDING REQUESTS WITH NEW TOKEN
+const processPendingRequests = (next: HttpHandlerFn, token: string): void => {
+  // Process all queued requests
+  while (pendingRequests.length) {
+    const request = pendingRequests.pop();
+    if (request) {
+      // Retry each request with new token
+      next(addAuthHeader(request, token)).subscribe();
+    }
   }
-  return request.clone({ headers });
 };
