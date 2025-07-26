@@ -4,18 +4,18 @@ import { environment } from '../../../environments/environment';
 import { Router } from '@angular/router';
 
 @Injectable({
-  providedIn: 'root' 
+  providedIn: 'root'
 })
 export class LoginService {
 
   constructor(
-    private common: CommonService,  
-    private router: Router,       
+    private common: CommonService,
+    private router: Router,
   ) { }
 
   // Check if the user is logged in by verifying the existence of the token and user cookies
   isLoggedIn(): boolean {
-    if (this.common.getCookie(environment.token) && this.common.getCookie(environment.user)) {
+    if (this.common.getCookie(environment.user)) {
       return true;
     } else {
       return false;
@@ -24,32 +24,30 @@ export class LoginService {
 
   // Get the JWT token, decrypt it, and return the parsed object
   getToken() {
-    let token = this.common.getCookie(environment.token);
-    let decryptToken = this.common.decrypt(environment.tokenKey, token);
-    return JSON.parse(decryptToken);
+    let user = this.getUser()
+    return user.token;
   }
 
   // Get the user data, decrypt it, and return the parsed object
   getUser() {
     let user = this.common.getCookie(environment.user);
+    if (!user) {
+      return null;
+    }
     let userInfoDecrypt = this.common.decrypt(environment.userKey, user);
     return JSON.parse(userInfoDecrypt);
   }
 
   // Get the role of the user 
   getUserRole() {
-    return this.getUser().role.toUpperCase();
+    const user = this.getUser();
+    return user && user.role ? user.role.toUpperCase() : null;
   }
 
   // Set user and token data in cookies after encrypting them
   setUserAndToken(user: any) {
     let EncrDecrUser = this.common.encrypt(environment.userKey, user);
     this.common.setCookie(environment.user, EncrDecrUser, environment.cookieExpTime);  // Set encrypted user cookie
-
-    let EncrDecrJwtToken = this.common.encrypt(environment.tokenKey, user.token);
-    this.common.setCookie(environment.token, EncrDecrJwtToken, environment.cookieExpTime);  // Set encrypted token cookie
-
-    
     this.router.navigate(['/']);
   }
 

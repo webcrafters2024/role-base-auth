@@ -1,25 +1,20 @@
-
-
 <div class="dashboard mt-5">
     <div class="container">
         <div class="row">
-
-
-                 @for (product of products; track $index) {
-                <div class="col-md-3">
-                    <div class="card" >
-                        <img class="card-img-top" src={{product.images[0].url}} alt="Card image cap">
-                        <div class="card-body">
-                          <h5 class="card-title">{{product.title}}</h5>
-                          <p class="card-text"[innerHTML]="product.description"></p>
-                          <a href="#" class="btn btn-primary">Go somewhere</a>
-                        </div>
-                      </div>
-
+            @for (product of products; track $index) {
+            <div class="col-md-3">
+                <div class="card">
+                    <img class="card-img-top" src={{product.images[0].url}} alt="Card image cap">
+                    <div class="card-body">
+                        <h5 class="card-title">{{product.title}}</h5>
+                        <p class="card-text" [innerHTML]="product.description"></p>
+                        <a href="#" class="btn btn-primary">Go somewhere</a>
+                    </div>
                 </div>
 
-            }
+            </div>
 
+            }
 
         </div>
     </div>

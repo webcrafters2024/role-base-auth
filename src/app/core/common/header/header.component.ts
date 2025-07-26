@@ -12,35 +12,25 @@ import { RouterLink } from '@angular/router';
   styleUrl: './header.component.scss'
 })
 export class HeaderComponent implements OnInit {
-
-
-
   userRole: string = ""
 
-
-
-
-  constructor(private loginService: LoginService, private common: CommonService) {
-
+  constructor(
+    private loginService: LoginService,
+    private common: CommonService) {
   }
 
-
   ngOnInit(): void {
-
     this.userRole = this.loginService.getUserRole()
   }
 
-
-
   getRoleBasedMenu(userRole: string) {
-    return this.common.menu.filter((menu: any) => menu.role.includes(userRole.toUpperCase()))
-
+    if (!userRole) {
+      return []; // Return empty menu if userRole is null or undefined
+    }
+    return this.common.menu.filter((menu: any) => menu.role.includes(userRole.toUpperCase()));
   }
 
   logOut() {
     this.loginService.logOut()
   }
-
-
-
 }

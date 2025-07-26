@@ -9,37 +9,19 @@ import { ApiService } from '../../core/service/api.service';
   styleUrl: './dashboard.component.scss'
 })
 export class DashboardComponent {
-
-
-    products:any =[]
-
+  products: any = []
   constructor(
     private apiService: ApiService,
-
   ) {
-
-
   }
-
   ngOnInit(): void {
     this.getData()
-    this.getData()
-    this.getData()
-
-    this.getData()
-
-    this.getData()
-
-    this.getData()
   }
-
-  getData(){
-    this.apiService.apiGet('api/product').subscribe((res)=>{
-      if(res.success){
-      this.products = res.products
+  getData() {
+    this.apiService.apiGet('api/product').subscribe((res) => {
+      if (res.success) {
+        this.products = res.products
       }
     })
   }
-
-
 }
