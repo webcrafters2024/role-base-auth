@@ -12,7 +12,4 @@ export const routes: Routes = [
     { component: AdminComponent, path: 'admin', canActivate: [authGuard], data: { roles: ['ADMIN',] }, },
     { component: LoginComponent, path: 'login', canActivate: [beforeloginGuard] }
 
-
-
-
 ];

@@ -35,6 +35,7 @@ export class CommonService {
     this.Cookie.set(key, JSON.stringify(value), { expires: expireTime, domain: environment.domain, path: '/', sameSite: 'Lax' });
     return true
   }
+
   public getCookie(key: any) {
     let value: any = this.Cookie.get(key);
     try {
@@ -64,5 +65,6 @@ export class CommonService {
     var decryptKey = CryptoJS.AES.decrypt(value, key);
     return decryptKey.toString(CryptoJS.enc.Utf8);
   }
+  
 
 }

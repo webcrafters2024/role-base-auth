@@ -9,6 +9,9 @@ import { errorInterceptor } from './core/interceptor/error.interceptor';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes),
+   // provideHttpClient()  ko import karna zaroori hai, 
+   // warna HttpClient ka use karne par error milega
+   //  — HTTP service available nahi hogi.
     provideHttpClient(withInterceptors([httpconfigInterceptor, jwtInterceptor, errorInterceptor])),
   
   ]
